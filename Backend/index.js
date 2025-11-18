@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './mongodb.js';
 import authRoutes from './routes/authRoutes.js';
+import movieRoutes from './routes/movieRoutes.js';
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/movie', movieRoutes);
 
 // Test route
 app.get('/', (req, res) => {

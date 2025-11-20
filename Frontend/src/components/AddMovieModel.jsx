@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Film, Star, Calendar, Clock, Tag } from 'lucide-react';
+import { X, Film, Star, Calendar, Clock, Tag, Loader2 } from 'lucide-react';
 
 export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMovie, movieToEdit = null }) {
   const [formData, setFormData] = useState({
@@ -15,8 +15,13 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
   });
 
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   const genres = ['Action', 'Sci-Fi', 'Drama', 'Crime', 'Thriller', 'Comedy', 'Horror', 'Romance', 'Adventure', 'Animation'];
+
+  // API Base URL - Update this with your backend URL
+  const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:5000/api';
 
   // Populate form when editing
   useEffect(() => {
@@ -57,6 +62,10 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+    // Clear API error when user makes changes
+    if (apiError) {
+      setApiError('');
+    }
   };
 
   const validateForm = () => {
@@ -86,46 +95,89 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
       newErrors.duration = 'Duration is required';
     }
     
+    if (!formData.description.trim()) {
+      newErrors.description = 'Description is required';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
-    if (validateForm()) {
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+    setApiError('');
+
+    try {
+      // Get token from localStorage (adjust based on your auth implementation)
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setApiError('You must be logged in to perform this action');
+        setIsLoading(false);
+        return;
+      }
+
+      // Prepare the payload
+      const payload = {
+        title: formData.title,
+        year: parseInt(formData.year),
+        genre: formData.genre,
+        rating: parseFloat(formData.rating),
+        duration: formData.duration,
+        poster: formData.poster || undefined,
+        description: formData.description,
+        watched: formData.watched,
+        favorite: formData.favorite
+      };
+
+      let response;
+
       if (movieToEdit) {
         // Update existing movie
-        const updatedMovie = {
-          ...movieToEdit,
-          title: formData.title,
-          year: parseInt(formData.year),
-          genre: formData.genre,
-          rating: parseFloat(formData.rating),
-          duration: formData.duration,
-          poster: formData.poster || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=300&h=450&fit=crop',
-          description: formData.description || 'No description available',
-          watched: formData.watched,
-          favorite: formData.favorite
-        };
-        onUpdateMovie(updatedMovie);
+        response = await fetch(`${API_BASE_URL}/movie/${movieToEdit._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
       } else {
-        // Add new movie
-        const newMovie = {
-          id: Date.now(),
-          title: formData.title,
-          year: parseInt(formData.year),
-          genre: formData.genre,
-          rating: parseFloat(formData.rating),
-          duration: formData.duration,
-          poster: formData.poster || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=300&h=450&fit=crop',
-          description: formData.description || 'No description available',
-          watched: formData.watched,
-          favorite: formData.favorite,
-          addedDate: new Date().toISOString().split('T')[0]
-        };
-        onAddMovie(newMovie);
+        // Create new movie
+        response = await fetch(`${API_BASE_URL}/movie`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
       }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Something went wrong');
+      }
+
+      // Success - call the appropriate callback
+      if (movieToEdit) {
+        onUpdateMovie(data.data);
+      } else {
+        onAddMovie(data.data);
+      }
+
       resetForm();
       onClose();
+    } catch (error) {
+      console.error('Error submitting movie:', error);
+      setApiError(error.message || 'Failed to save movie. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -142,16 +194,19 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
       favorite: false
     });
     setErrors({});
+    setApiError('');
   };
 
   const handleClose = () => {
-    resetForm();
-    onClose();
+    if (!isLoading) {
+      resetForm();
+      onClose();
+    }
   };
 
   // Close on backdrop click
   const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget) {
+    if (e.target === e.currentTarget && !isLoading) {
       handleClose();
     }
   };
@@ -159,14 +214,14 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
   // Close on ESC key
   useEffect(() => {
     const handleEscape = (e) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && !isLoading) {
         handleClose();
       }
     };
     
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen]);
+  }, [isOpen, isLoading]);
 
   if (!isOpen) return null;
 
@@ -174,9 +229,7 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
 
   return (
     <div 
-      className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
-
-
+      className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn z-50"
       onClick={handleBackdropClick}
     >
       <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-gray-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-slideUp">
@@ -192,7 +245,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
           </div>
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-all hover:rotate-90 duration-300"
+            disabled={isLoading}
+            className="p-2 hover:bg-gray-700 rounded-lg transition-all hover:rotate-90 duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-6 h-6 text-gray-400 hover:text-white" />
           </button>
@@ -200,6 +254,17 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
 
         {/* Form Content */}
         <div className="p-6 space-y-5">
+          {/* API Error Message */}
+          {apiError && (
+            <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start space-x-3">
+              <span className="text-red-500 text-xl">⚠</span>
+              <div className="flex-1">
+                <p className="text-red-400 font-medium">Error</p>
+                <p className="text-red-300 text-sm mt-1">{apiError}</p>
+              </div>
+            </div>
+          )}
+
           {/* Title */}
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">
@@ -211,7 +276,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
               value={formData.title}
               onChange={handleChange}
               placeholder="Enter movie title"
-              className={`w-full px-4 py-3 bg-gray-800 border ${errors.title ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all`}
+              disabled={isLoading}
+              className={`w-full px-4 py-3 bg-gray-800 border ${errors.title ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
             />
             {errors.title && <p className="text-red-400 text-sm mt-1 flex items-center"><span className="mr-1">⚠</span>{errors.title}</p>}
           </div>
@@ -229,7 +295,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
                 value={formData.year}
                 onChange={handleChange}
                 placeholder="2024"
-                className={`w-full px-4 py-3 bg-gray-800 border ${errors.year ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all`}
+                disabled={isLoading}
+                className={`w-full px-4 py-3 bg-gray-800 border ${errors.year ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
               />
               {errors.year && <p className="text-red-400 text-sm mt-1 flex items-center"><span className="mr-1">⚠</span>{errors.year}</p>}
             </div>
@@ -243,7 +310,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
                 name="genre"
                 value={formData.genre}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 bg-gray-800 border ${errors.genre ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all`}
+                disabled={isLoading}
+                className={`w-full px-4 py-3 bg-gray-800 border ${errors.genre ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 <option value="">Select genre</option>
                 {genres.map(genre => (
@@ -270,7 +338,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
                 step="0.1"
                 min="0"
                 max="10"
-                className={`w-full px-4 py-3 bg-gray-800 border ${errors.rating ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all`}
+                disabled={isLoading}
+                className={`w-full px-4 py-3 bg-gray-800 border ${errors.rating ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
               />
               {errors.rating && <p className="text-red-400 text-sm mt-1 flex items-center"><span className="mr-1">⚠</span>{errors.rating}</p>}
             </div>
@@ -286,7 +355,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
                 value={formData.duration}
                 onChange={handleChange}
                 placeholder="120 min"
-                className={`w-full px-4 py-3 bg-gray-800 border ${errors.duration ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all`}
+                disabled={isLoading}
+                className={`w-full px-4 py-3 bg-gray-800 border ${errors.duration ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
               />
               {errors.duration && <p className="text-red-400 text-sm mt-1 flex items-center"><span className="mr-1">⚠</span>{errors.duration}</p>}
             </div>
@@ -303,7 +373,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
               value={formData.poster}
               onChange={handleChange}
               placeholder="https://example.com/poster.jpg"
-              className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all"
+              disabled={isLoading}
+              className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <p className="text-gray-500 text-xs mt-1">If left empty, a default poster will be used</p>
           </div>
@@ -311,7 +382,7 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
           {/* Description */}
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">
-              Description (optional)
+              Description *
             </label>
             <textarea
               name="description"
@@ -319,8 +390,10 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
               onChange={handleChange}
               placeholder="Enter movie description..."
               rows="4"
-              className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all resize-none"
+              disabled={isLoading}
+              className={`w-full px-4 py-3 bg-gray-800 border ${errors.description ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all resize-none disabled:opacity-50 disabled:cursor-not-allowed`}
             />
+            {errors.description && <p className="text-red-400 text-sm mt-1 flex items-center"><span className="mr-1">⚠</span>{errors.description}</p>}
           </div>
 
           {/* Checkboxes */}
@@ -331,7 +404,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
                 name="watched"
                 checked={formData.watched}
                 onChange={handleChange}
-                className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                disabled={isLoading}
+                className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-2 focus:ring-purple-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <span className="text-gray-300 font-medium group-hover:text-white transition-colors">Mark as watched</span>
             </label>
@@ -342,7 +416,8 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
                 name="favorite"
                 checked={formData.favorite}
                 onChange={handleChange}
-                className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-red-600 focus:ring-2 focus:ring-red-500 cursor-pointer"
+                disabled={isLoading}
+                className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-red-600 focus:ring-2 focus:ring-red-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <span className="text-gray-300 font-medium group-hover:text-white transition-colors">Add to favorites</span>
             </label>
@@ -353,16 +428,19 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
             <button
               type="button"
               onClick={handleClose}
-              className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-semibold rounded-lg transition-all duration-200"
+              disabled={isLoading}
+              className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSubmit}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold rounded-lg transition-all transform hover:scale-105 shadow-lg hover:shadow-purple-500/50 duration-200"
+              disabled={isLoading}
+              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold rounded-lg transition-all transform hover:scale-105 shadow-lg hover:shadow-purple-500/50 duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center space-x-2"
             >
-              {isEditMode ? 'Update Movie' : 'Add Movie'}
+              {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
+              <span>{isLoading ? 'Saving...' : isEditMode ? 'Update Movie' : 'Add Movie'}</span>
             </button>
           </div>
         </div>

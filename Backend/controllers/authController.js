@@ -2,21 +2,22 @@ import User from '../models/user.js';
 import jwt from 'jsonwebtoken';
 
 // Generate JWT Token
-const generateToken = (userId) => {
+export const generateToken = (id) => {
   return jwt.sign(
-    { userId },
-    process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+    { userId: id },  // ✅ MUST be 'userId' to match your middleware
+    process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
 };
 
-// @desc    Register new user
+// @desc    Register user
 // @route   POST /api/auth/register
 // @access  Public
 export const register = async (req, res) => {
   try {
     const { username, email, password, confirmPassword } = req.body;
-        // Validation
+    
+    // Validation
     if (!username || !email || !password || !confirmPassword) {
       return res.status(400).json({ 
         success: false,
@@ -63,13 +64,17 @@ export const register = async (req, res) => {
       username,
       email,
       password,
-      role: 'user' // Default role
+      role: 'user'
     });
 
     await user.save();
 
-    // Generate token
+    // Generate token with userId
     const token = generateToken(user._id);
+
+    // 🐛 DEBUG: Check token payload
+    console.log('🔑 Token generated');
+    console.log('📦 Token payload:', jwt.decode(token));
 
     res.status(201).json({
       success: true,
@@ -109,8 +114,8 @@ export const login = async (req, res) => {
       });
     }
 
-    // Check if user exists
-    const user = await User.findOne({ email });
+    // Check if user exists (include password for comparison)
+    const user = await User.findOne({ email }).select('+password');
     
     if (!user) {
       return res.status(401).json({ 
@@ -129,8 +134,12 @@ export const login = async (req, res) => {
       });
     }
 
-    // Generate token
+    // Generate token with userId
     const token = generateToken(user._id);
+
+    // 🐛 DEBUG: Check token payload
+    console.log('🔑 Token generated for login');
+    console.log('📦 Token payload:', jwt.decode(token));
 
     res.status(200).json({
       success: true,
@@ -163,20 +172,12 @@ export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('-password');
     
-    if (!user) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'User not found' 
-      });
-    }
-
     res.status(200).json({
       success: true,
       user
     });
-
   } catch (error) {
-    console.error('Get User Error:', error);
+    console.error('Get Me Error:', error);
     res.status(500).json({ 
       success: false,
       message: 'Server error',
@@ -190,11 +191,10 @@ export const getMe = async (req, res) => {
 // @access  Private
 export const logout = async (req, res) => {
   try {
-    // In a JWT setup, logout is typically handled on the client side
-    // by removing the token from storage
+    // In JWT, logout is handled on frontend by removing token
     res.status(200).json({
       success: true,
-      message: 'Logout successful'
+      message: 'Logged out successfully'
     });
   } catch (error) {
     console.error('Logout Error:', error);

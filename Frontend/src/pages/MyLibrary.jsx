@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar.jsx';
 import Sidebar from '../components/Sidebar.jsx';
-import { Film, Search, Plus, Star, Filter, Grid, List, Calendar, Clock, Eye, Heart, Trash2, Edit, Play } from 'lucide-react';
+import { Film, Search, Plus, Star, Filter, Grid, List, Calendar, Clock, Eye, Heart, Trash2, Edit, Play, Loader2 } from 'lucide-react';
 import AddMovieModel from '../components/AddMovieModel.jsx';
+
+const API_URL = 'http://localhost:5000/api';
 
 export default function MyLibrary() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -12,128 +14,87 @@ export default function MyLibrary() {
   const [sortBy, setSortBy] = useState('date');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('library');
+  const [loading, setLoading] = useState(true);
 
-  // Sample movie data - Changed to state so it can be updated
-  const [movies, setMovies] = useState([
-    {
-      id: 1,
-      title: 'The Dark Knight',
-      rating: 9.0,
-      genre: 'Action',
-      year: 2008,
-      duration: '152 min',
-      watched: true,
-      favorite: true,
-      addedDate: '2024-01-15',
-      poster: 'https://images.unsplash.com/photo-1509347528160-9a9e33742cdb?w=300&h=450&fit=crop',
-      description: 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological tests.'
-    },
-    {
-      id: 2,
-      title: 'Inception',
-      rating: 8.8,
-      genre: 'Sci-Fi',
-      year: 2010,
-      duration: '148 min',
-      watched: true,
-      favorite: false,
-      addedDate: '2024-01-20',
-      poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300&h=450&fit=crop',
-      description: 'A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea.'
-    },
-    {
-      id: 3,
-      title: 'Interstellar',
-      rating: 8.6,
-      genre: 'Sci-Fi',
-      year: 2014,
-      duration: '169 min',
-      watched: false,
-      favorite: true,
-      addedDate: '2024-02-01',
-      poster: 'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=300&h=450&fit=crop',
-      description: 'A team of explorers travel through a wormhole in space in an attempt to ensure humanity\'s survival.'
-    },
-    {
-      id: 4,
-      title: 'Pulp Fiction',
-      rating: 8.9,
-      genre: 'Crime',
-      year: 1994,
-      duration: '154 min',
-      watched: true,
-      favorite: false,
-      addedDate: '2024-02-10',
-      poster: 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=300&h=450&fit=crop',
-      description: 'The lives of two mob hitmen, a boxer, a gangster and his wife intertwine in four tales of violence and redemption.'
-    },
-    {
-      id: 5,
-      title: 'The Matrix',
-      rating: 8.7,
-      genre: 'Sci-Fi',
-      year: 1999,
-      duration: '136 min',
-      watched: true,
-      favorite: true,
-      addedDate: '2024-02-15',
-      poster: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=300&h=450&fit=crop',
-      description: 'A computer hacker learns from mysterious rebels about the true nature of his reality and his role in the war against its controllers.'
-    },
-    {
-      id: 6,
-      title: 'Fight Club',
-      rating: 8.8,
-      genre: 'Drama',
-      year: 1999,
-      duration: '139 min',
-      watched: false,
-      favorite: false,
-      addedDate: '2024-02-20',
-      poster: 'https://images.unsplash.com/photo-1594908900066-3f47337549d8?w=300&h=450&fit=crop',
-      description: 'An insomniac office worker and a devil-may-care soap maker form an underground fight club that evolves into much more.'
-    },
-    {
-      id: 7,
-      title: 'Forrest Gump',
-      rating: 8.8,
-      genre: 'Drama',
-      year: 1994,
-      duration: '142 min',
-      watched: true,
-      favorite: true,
-      addedDate: '2024-02-25',
-      poster: 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?w=300&h=450&fit=crop',
-      description: 'The presidencies of Kennedy and Johnson, the Vietnam War, and other historical events unfold from the perspective of an Alabama man.'
-    },
-    {
-      id: 8,
-      title: 'The Shawshank Redemption',
-      rating: 9.3,
-      genre: 'Drama',
-      year: 1994,
-      duration: '142 min',
-      watched: true,
-      favorite: true,
-      addedDate: '2024-03-01',
-      poster: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=300&h=450&fit=crop',
-      description: 'Two imprisoned men bond over a number of years, finding solace and eventual redemption through acts of common decency.'
-    },
-  ]);
+  // Movies state - now fetched from backend
+  const [movies, setMovies] = useState([]);
+
+  const genres = ['All', 'Action', 'Sci-Fi', 'Drama', 'Crime', 'Thriller', 'Comedy', 'Horror', 'Romance', 'Adventure', 'Animation'];
+
+  // Fetch movies from backend on component mount
+  useEffect(() => {
+    fetchMovies();
+  }, []);
+
+  const fetchMovies = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No token found');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/movie`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      console.log('Fetched movies:', data);
+
+      if (response.ok && data.success) {
+        setMovies(data.data || []);
+      } else {
+        console.error('Failed to fetch movies:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching movies:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddMovie = (newMovie) => {
+    console.log('Movie added:', newMovie);
     setMovies(prev => [...prev, newMovie]);
   };
 
   const handleUpdateMovie = (updatedMovie) => {
+    console.log('Movie updated:', updatedMovie);
     setMovies(prev => prev.map(movie => 
-      movie.id === updatedMovie.id ? updatedMovie : movie
+      movie._id === updatedMovie._id ? updatedMovie : movie
     ));
   };
 
-  const handleDeleteMovie = (movieId) => {
-    if (window.confirm('Are you sure you want to delete this movie?')) {
-      setMovies(prev => prev.filter(movie => movie.id !== movieId));
+  const handleDeleteMovie = async (movieId) => {
+    if (!window.confirm('Are you sure you want to delete this movie?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/movie/${movieId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setMovies(prev => prev.filter(movie => movie._id !== movieId));
+        console.log('Movie deleted successfully');
+      } else {
+        alert(data.message || 'Failed to delete movie');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete movie');
     }
   };
 
@@ -142,10 +103,26 @@ export default function MyLibrary() {
     setIsModalOpen(true);
   };
 
-  const handleToggleFavorite = (movieId) => {
-    setMovies(prev => prev.map(movie => 
-      movie.id === movieId ? { ...movie, favorite: !movie.favorite } : movie
-    ));
+  const handleToggleFavorite = async (movieId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/movie/${movieId}/favorite`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setMovies(prev => prev.map(movie => 
+          movie._id === movieId ? data.data : movie
+        ));
+      }
+    } catch (error) {
+      console.error('Toggle favorite error:', error);
+    }
   };
 
   const handleCloseModal = () => {
@@ -153,22 +130,40 @@ export default function MyLibrary() {
     setMovieToEdit(null);
   };
 
-  const genres = ['All', 'Action', 'Sci-Fi', 'Drama', 'Crime', 'Thriller', 'Comedy'];
-
+  // Calculate stats from movies
   const stats = {
     total: movies.length,
     watched: movies.filter(m => m.watched).length,
     favorites: movies.filter(m => m.favorite).length,
-    avgRating: (movies.reduce((acc, m) => acc + m.rating, 0) / movies.length).toFixed(1)
+    avgRating: movies.length > 0 
+      ? (movies.reduce((acc, m) => acc + m.rating, 0) / movies.length).toFixed(1)
+      : '0.0'
   };
 
   const filteredMovies = movies.filter(movie => {
+    // Search filter
+    if (searchQuery && !movie.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+
+    // Status/Genre filter
     if (selectedFilter === 'all') return true;
     if (selectedFilter === 'watched') return movie.watched;
     if (selectedFilter === 'unwatched') return !movie.watched;
     if (selectedFilter === 'favorites') return movie.favorite;
     return movie.genre.toLowerCase() === selectedFilter.toLowerCase();
   });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-16 h-16 text-purple-500 animate-spin mx-auto mb-4" />
+          <p className="text-white text-xl">Loading your movies...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-950">
@@ -329,12 +324,12 @@ export default function MyLibrary() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {filteredMovies.map((movie) => (
                 <div
-                  key={movie.id}
+                  key={movie._id}
                   className="bg-gray-800 bg-opacity-50 backdrop-blur-xl rounded-2xl border border-gray-700 overflow-hidden transition-all hover:scale-105 hover:shadow-2xl cursor-pointer group relative"
                 >
                   <div className="relative aspect-[2/3] overflow-hidden">
                     <img
-                      src={movie.poster}
+                      src={movie.poster || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300&h=450&fit=crop'}
                       alt={movie.title}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                     />
@@ -343,7 +338,7 @@ export default function MyLibrary() {
                     {/* Quick Actions */}
                     <div className="absolute top-2 right-2 flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
-                        onClick={() => handleToggleFavorite(movie.id)}
+                        onClick={() => handleToggleFavorite(movie._id)}
                         className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${movie.favorite ? 'bg-red-600 text-white' : 'bg-black bg-opacity-50 text-white hover:bg-red-600'}`}
                       >
                         <Heart className="w-4 h-4" fill={movie.favorite ? 'currentColor' : 'none'} />
@@ -355,7 +350,7 @@ export default function MyLibrary() {
                         <Edit className="w-4 h-4" />
                       </button>
                       <button 
-                        onClick={() => handleDeleteMovie(movie.id)}
+                        onClick={() => handleDeleteMovie(movie._id)}
                         className="p-2 bg-black bg-opacity-50 rounded-lg backdrop-blur-sm text-white hover:bg-red-600 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -391,12 +386,12 @@ export default function MyLibrary() {
             <div className="space-y-4">
               {filteredMovies.map((movie) => (
                 <div
-                  key={movie.id}
+                  key={movie._id}
                   className="bg-gray-800 bg-opacity-50 backdrop-blur-xl rounded-xl border border-gray-700 p-4 hover:bg-gray-700 hover:bg-opacity-50 transition-all cursor-pointer"
                 >
                   <div className="flex items-center space-x-4">
                     <img
-                      src={movie.poster}
+                      src={movie.poster || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300&h=450&fit=crop'}
                       alt={movie.title}
                       className="w-20 h-28 object-cover rounded-lg"
                     />
@@ -423,7 +418,7 @@ export default function MyLibrary() {
                             </span>
                           )}
                           <button 
-                            onClick={() => handleToggleFavorite(movie.id)}
+                            onClick={() => handleToggleFavorite(movie._id)}
                             className={`p-2 rounded-lg transition-colors ${movie.favorite ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-red-600 hover:text-white'}`}
                           >
                             <Heart className="w-5 h-5" fill={movie.favorite ? 'currentColor' : 'none'} />
@@ -435,7 +430,7 @@ export default function MyLibrary() {
                             <Edit className="w-5 h-5" />
                           </button>
                           <button 
-                            onClick={() => handleDeleteMovie(movie.id)}
+                            onClick={() => handleDeleteMovie(movie._id)}
                             className="p-2 bg-gray-700 rounded-lg text-gray-400 hover:bg-red-600 hover:text-white transition-colors"
                           >
                             <Trash2 className="w-5 h-5" />

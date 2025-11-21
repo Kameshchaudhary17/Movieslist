@@ -1,5 +1,87 @@
 import Movie from '../models/movie.js';
 
+
+// @desc    Create new movie
+// @route   POST /api/movies
+// @access  Private
+export const createMovie = async (req, res) => {
+  try {
+    const { title, description, rating, genre, year, duration, poster, watched, favorite } = req.body;
+    
+    // Validation
+    if (!title || !description || !genre || !year || !duration) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields'
+      });
+    }
+    
+    const movie = await Movie.create({
+      title,
+      description,
+      rating: rating || 0,
+      genre,
+      year,
+      duration,
+      poster: poster || undefined,
+      watched: watched || false,
+      favorite: favorite || false,
+      userId: req.user._id
+    });
+    
+    res.status(201).json({
+      success: true,
+      message: 'Movie added successfully',
+      data: movie
+    });
+  } catch (error) {
+    console.error('Create Movie Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while creating movie',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Update movie
+// @route   PUT /api/movies/:id
+// @access  Private
+export const updateMovie = async (req, res) => {
+  try {
+    let movie = await Movie.findOne({
+      _id: req.params.id,
+      userId: req.user._id
+    });
+    
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+    
+    movie = await Movie.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    
+    res.status(200).json({
+      success: true,
+      message: 'Movie updated successfully',
+      data: movie
+    });
+  } catch (error) {
+    console.error('Update Movie Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating movie',
+      error: error.message
+    });
+  }
+};
+
 // @desc    Get all movies for a user
 // @route   GET /api/movies
 // @access  Private
@@ -85,87 +167,6 @@ export const getMovie = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching movie',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Create new movie
-// @route   POST /api/movies
-// @access  Private
-export const createMovie = async (req, res) => {
-  try {
-    const { title, description, rating, genre, year, duration, poster, watched, favorite } = req.body;
-    
-    // Validation
-    if (!title || !description || !genre || !year || !duration) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide all required fields'
-      });
-    }
-    
-    const movie = await Movie.create({
-      title,
-      description,
-      rating: rating || 0,
-      genre,
-      year,
-      duration,
-      poster: poster || undefined,
-      watched: watched || false,
-      favorite: favorite || false,
-      userId: req.user._id
-    });
-    
-    res.status(201).json({
-      success: true,
-      message: 'Movie added successfully',
-      data: movie
-    });
-  } catch (error) {
-    console.error('Create Movie Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while creating movie',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Update movie
-// @route   PUT /api/movies/:id
-// @access  Private
-export const updateMovie = async (req, res) => {
-  try {
-    let movie = await Movie.findOne({
-      _id: req.params.id,
-      userId: req.user._id
-    });
-    
-    if (!movie) {
-      return res.status(404).json({
-        success: false,
-        message: 'Movie not found'
-      });
-    }
-    
-    movie = await Movie.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    
-    res.status(200).json({
-      success: true,
-      message: 'Movie updated successfully',
-      data: movie
-    });
-  } catch (error) {
-    console.error('Update Movie Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while updating movie',
       error: error.message
     });
   }

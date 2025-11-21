@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Film, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom'; 
 
@@ -18,6 +18,22 @@ export default function MovieAuth() {
     password: '',
     confirmPassword: ''
   });
+
+  // ✅ Check if user is already logged in on component mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    
+    if (token && user) {
+      console.log('✅ User already logged in, redirecting...');
+      const userData = JSON.parse(user);
+      if (userData.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/library', { replace: true });
+      }
+    }
+  }, [navigate]);
 
   const handleSubmit = async () => {
     setError('');
@@ -57,6 +73,9 @@ export default function MovieAuth() {
             confirmPassword: formData.confirmPassword
           };
 
+      console.log(`🚀 Attempting ${isLogin ? 'login' : 'registration'}...`);
+      console.log('📍 API Endpoint:', `${API_URL}${endpoint}`);
+
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -66,6 +85,7 @@ export default function MovieAuth() {
       });
 
       const data = await response.json();
+      console.log('📦 Response:', data);
 
       if (!response.ok) {
         setError(data.message || 'Something went wrong');
@@ -74,47 +94,53 @@ export default function MovieAuth() {
 
       if (data.success) {
         if (isLogin) {
-          // LOGIN: Store token and navigate based on user role
+          // LOGIN SUCCESS
           const welcomeMsg = `Welcome back, ${data.user.username}!`;
           setSuccess(welcomeMsg);
           
-          // Store authentication data
-          // In your real app, uncomment these lines:
-          // localStorage.setItem('token', data.token);
-          // localStorage.setItem('user', JSON.stringify(data.user));
+          // ✅ Store authentication data
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
           
+          console.log('✅ Token stored:', data.token.substring(0, 20) + '...');
+          console.log('✅ User stored:', data.user);
+          console.log('✅ User role:', data.user.role);
+          
+          // ✅ FIXED: Navigate immediately without setTimeout
+          // Use replace: true to prevent going back to login page
+          const targetRoute = data.user.role === 'admin' ? '/admin' : '/user';
+          console.log('🚀 Navigating to:', targetRoute);
+          
+          // Small delay just for UX (show success message briefly)
           setTimeout(() => {
-            if (data.user.role === 'admin') {
-              
-              navigate('/admin');
-              
-              // For demonstration only:
-              alert(`🎬 Admin Access Granted${data.user.email}`);
-            } else {
-              
-              navigate('/user');
-              
-              // For demonstration only:
-              alert(`🎬 Login Successful${data.user.email}`);
-            }
-          }, 1500);
+            navigate(targetRoute, { replace: true });
+          }, 800);
+          
         } else {
-          // REGISTER: Switch to login page
+          // REGISTER SUCCESS
           const welcomeMsg = `Account created successfully! Welcome, ${data.user.username}!`;
           setSuccess(welcomeMsg);
           
+          console.log('✅ Registration successful');
+          
+          // Switch to login mode after short delay
           setTimeout(() => {
             setSuccess('Registration successful! Please login to continue.');
-            setIsLogin(true); // Switch to login mode
-            setFormData({ username: '', email: formData.email, password: '', confirmPassword: '' }); // Keep email filled
+            setIsLogin(true);
+            setFormData({ 
+              username: '', 
+              email: formData.email, 
+              password: '', 
+              confirmPassword: '' 
+            });
           }, 1500);
         }
       } else {
         setError(data.message || 'Something went wrong');
       }
     } catch (err) {
+      console.error('❌ Auth Error:', err);
       setError('Unable to connect to server. Please make sure your backend is running on http://localhost:5000');
-      console.error('Auth Error:', err);
     } finally {
       setLoading(false);
     }
@@ -185,14 +211,14 @@ export default function MovieAuth() {
 
           {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-500 bg-opacity-20 border border-red-500 rounded-lg">
+            <div className="mb-4 p-3 bg-red-500 bg-opacity-20 border border-red-500 rounded-lg animate-shake">
               <p className="text-red-400 text-sm text-center">{error}</p>
             </div>
           )}
 
           {/* Success Message */}
           {success && (
-            <div className="mb-4 p-3 bg-green-500 bg-opacity-20 border border-green-500 rounded-lg">
+            <div className="mb-4 p-3 bg-green-500 bg-opacity-20 border border-green-500 rounded-lg animate-bounce-once">
               <p className="text-green-400 text-sm text-center">{success}</p>
             </div>
           )}
@@ -314,6 +340,27 @@ export default function MovieAuth() {
           By continuing, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>
+
+      <style>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
+        }
+        
+        @keyframes bounce-once {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+        }
+        
+        .animate-shake {
+          animation: shake 0.3s ease-in-out;
+        }
+        
+        .animate-bounce-once {
+          animation: bounce-once 0.5s ease-in-out;
+        }
+      `}</style>
     </div>
   );
 }

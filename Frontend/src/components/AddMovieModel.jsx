@@ -104,22 +104,29 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
+  if (!validateForm()) {
+    return;
+  }
+
+  setIsLoading(true);
+  setApiError('');
+
+  try {
+    const token = localStorage.getItem('token');
+    
+    // DEBUG: Check token
+    console.log('Token from localStorage:', token);
+    console.log('Token exists:', !!token);
+    console.log('Token length:', token?.length);
+    
+    if (!token) {
+      setApiError('You must be logged in to perform this action. Please log in again.');
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    setApiError('');
-
-    try {
-      // Get token from localStorage (adjust based on your auth implementation)
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        setApiError('You must be logged in to perform this action');
-        setIsLoading(false);
-        return;
-      }
+      console.log('Token found:', token ? 'Yes' : 'No');
+      console.log('API URL:', API_BASE_URL);
 
       // Prepare the payload
       const payload = {
@@ -160,7 +167,16 @@ export default function AddMovieModal({ isOpen, onClose, onAddMovie, onUpdateMov
 
       const data = await response.json();
 
+      console.log('Response status:', response.status);
+      console.log('Response data:', data);
+
       if (!response.ok) {
+        // Handle specific error cases
+        if (response.status === 401) {
+          // Token is invalid or expired
+          localStorage.removeItem('token'); // Clear invalid token
+          throw new Error('Your session has expired. Please log in again.');
+        }
         throw new Error(data.message || 'Something went wrong');
       }
 
